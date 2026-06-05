@@ -10,25 +10,32 @@ import { Input } from "@/components/ui/input";
 import { Search, Library, BookOpenCheck } from "lucide-react";
 import { Toaster } from "@/components/ui/toaster";
 
+const BOOKS_STORAGE_KEY = "leselogbuch_books";
+
 export default function LeseLogbuchPage() {
   const [books, setBooks] = useState<Book[]>([]);
+  const [hydrated, setHydrated] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [aiLabel, setAiLabel] = useState<string>("Quelle: Google Books/OpenLibrary (Fallback)");
 
   useEffect(() => {
-    const saved = localStorage.getItem("leselogbuch_books");
-    if (saved) {
+    const saved = localStorage.getItem(BOOKS_STORAGE_KEY);
+    if (saved !== null) {
       try {
-        const parsed = JSON.parse(saved);
-        setBooks(parsed.length > 0 ? parsed : getInitialBooks());
-      } catch (e) {
-        setBooks(getInitialBooks());
+        const parsed = JSON.parse(saved) as Book[];
+        if (Array.isArray(parsed)) {
+          setBooks(parsed);
+          setHydrated(true);
+          return;
+        }
+      } catch {
+        // ignore corrupt data
       }
-    } else {
-      setBooks(getInitialBooks());
     }
+    setBooks(getInitialBooks());
+    setHydrated(true);
   }, []);
 
   // Anzeige im Header: ob Ollama genutzt werden kann
@@ -50,10 +57,9 @@ export default function LeseLogbuchPage() {
   }, []);
 
   useEffect(() => {
-    if (books.length > 0) {
-      localStorage.setItem("leselogbuch_books", JSON.stringify(books));
-    }
-  }, [books]);
+    if (!hydrated) return;
+    localStorage.setItem(BOOKS_STORAGE_KEY, JSON.stringify(books));
+  }, [books, hydrated]);
 
   function getInitialBooks(): Book[] {
     return [
@@ -160,7 +166,10 @@ export default function LeseLogbuchPage() {
           setBooks((prev) => prev.map((b) => (b.id === id ? { ...b, ...up } : b)));
           setSelectedBook((prev) => (prev?.id === id ? { ...prev, ...up } : prev));
         }}
-        onDelete={(id) => setBooks((prev) => prev.filter((b) => b.id !== id))}
+        onDelete={(id) => {
+          setBooks((prev) => prev.filter((b) => b.id !== id));
+          setSelectedBook((prev) => (prev?.id === id ? null : prev));
+        }}
       />
       <Toaster />
     </div>

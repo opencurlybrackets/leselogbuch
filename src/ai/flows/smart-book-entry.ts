@@ -46,8 +46,12 @@ function stripHtml(html: string): string {
 /**
  * Hilfsfunktion zum Abrufen von Daten von der Google Books API.
  */
-async function fetchFromGoogleBooks(query: string): Promise<{ data: any | null; status: number }> {
-  const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=8&langRestrict=de`;
+async function fetchFromGoogleBooks(
+  query: string,
+  germanPreferred = false
+): Promise<{ data: any | null; status: number }> {
+  const lang = germanPreferred ? "&langRestrict=de" : "";
+  const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=8${lang}`;
   try {
     const response = await fetch(url);
     if (!response.ok) {
@@ -60,11 +64,19 @@ async function fetchFromGoogleBooks(query: string): Promise<{ data: any | null; 
   }
 }
 
+/** Zuerst deutsche Treffer, bei Bedarf ohne Sprachfilter (mehr Treffer). */
+async function fetchGoogleWithFallback(query: string) {
+  const de = await fetchFromGoogleBooks(query, true);
+  if (de.data?.items?.length) return de;
+  return fetchFromGoogleBooks(query, false);
+}
+
 /**
  * OpenLibrary Fallback (kostenlos, ohne API-Key).
  */
-async function fetchFromOpenLibrary(query: string) {
-  const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=8&language=de`;
+async function fetchFromOpenLibrary(query: string, germanPreferred = false) {
+  const lang = germanPreferred ? "&language=de" : "";
+  const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=8${lang}`;
   try {
     const response = await fetch(url);
     if (!response.ok) return null;
@@ -73,6 +85,12 @@ async function fetchFromOpenLibrary(query: string) {
     console.error("[OpenLibrary] Netzwerkfehler:", error);
     return null;
   }
+}
+
+async function fetchOpenLibraryWithFallback(query: string) {
+  const de = await fetchFromOpenLibrary(query, true);
+  if (de?.docs?.length) return de;
+  return fetchFromOpenLibrary(query, false);
 }
 
 async function fetchOpenLibraryWorkDescription(workKey: string): Promise<string | null> {
@@ -132,17 +150,21 @@ async function finalizeBookFields(fields: {
   sourceUsed: "googlebooks" | "openlibrary";
   aiUsed: "ollama" | "none";
 }): Promise<SmartBookEntryOutput> {
-  const german = await ensureGermanMetadata({
-    title: fields.title,
-    author: fields.author,
-    genre: fields.genre,
-    summary: fields.summary
-  });
-  return { ...fields, ...german };
+  try {
+    const german = await ensureGermanMetadata({
+      title: fields.title,
+      author: fields.author,
+      genre: fields.genre,
+      summary: fields.summary
+    });
+    return { ...fields, ...german };
+  } catch {
+    return fields;
+  }
 }
 
 export async function smartBookEntry(input: SmartBookEntryInput): Promise<SmartBookEntryOutput> {
-  const googleRes = await fetchFromGoogleBooks(input.query);
+  const googleRes = await fetchGoogleWithFallback(input.query);
   let googleData = googleRes.data;
   let item = pickBestGermanGoogleItem(googleData?.items) ?? googleData?.items?.[0];
   let sourceUsed: "googlebooks" | "openlibrary" = "googlebooks";
@@ -153,7 +175,7 @@ export async function smartBookEntry(input: SmartBookEntryInput): Promise<SmartB
       const correction = await queryCorrectionPrompt({ query: input.query });
       const corrected = (correction.output as any)?.correctedQuery as string | undefined;
       if (corrected && corrected.toLowerCase() !== input.query.toLowerCase()) {
-        const correctedRes = await fetchFromGoogleBooks(corrected);
+        const correctedRes = await fetchGoogleWithFallback(corrected);
         googleData = correctedRes.data;
         item = pickBestGermanGoogleItem(googleData?.items) ?? googleData?.items?.[0];
       }
@@ -167,7 +189,7 @@ export async function smartBookEntry(input: SmartBookEntryInput): Promise<SmartB
     if (googleRes.status === 429) {
       console.warn("[Google Books] Quota erreicht (429). Weiche auf OpenLibrary aus.");
     }
-    const ol = await fetchFromOpenLibrary(input.query);
+    const ol = await fetchOpenLibraryWithFallback(input.query);
     const doc =
       ol?.docs?.find((d: Record<string, unknown>) => pickBestGermanOpenLibraryDoc(d)) ?? ol?.docs?.[0];
     if (!doc) {
@@ -273,7 +295,7 @@ export async function smartBookEntry(input: SmartBookEntryInput): Promise<SmartB
 }
 
 export async function getBookSuggestions(input: SmartBookEntryInput): Promise<BookSuggestionsOutput> {
-  const googleRes = await fetchFromGoogleBooks(input.query);
+  const googleRes = await fetchGoogleWithFallback(input.query);
   const googleData = googleRes.data;
   if (googleData?.items?.length) {
     const suggestions = [...googleData.items]
@@ -291,7 +313,7 @@ export async function getBookSuggestions(input: SmartBookEntryInput): Promise<Bo
   }
 
   // Fallback: OpenLibrary (z. B. wenn Google 429 liefert)
-  const ol = await fetchFromOpenLibrary(input.query);
+  const ol = await fetchOpenLibraryWithFallback(input.query);
   if (!ol?.docs?.length) return { suggestions: [] };
 
   const suggestions = [...ol.docs]

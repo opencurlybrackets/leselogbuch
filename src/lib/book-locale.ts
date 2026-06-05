@@ -46,7 +46,10 @@ export async function translateToGerman(text: string, maxLen = 450): Promise<str
   const chunk = trimmed.slice(0, maxLen);
   try {
     const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(chunk)}&langpair=en|de`;
-    const res = await fetch(url, { next: { revalidate: 0 } });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
     if (!res.ok) return trimmed;
     const data = (await res.json()) as { responseData?: { translatedText?: string } };
     const translated = data.responseData?.translatedText?.trim();
@@ -57,22 +60,28 @@ export async function translateToGerman(text: string, maxLen = 450): Promise<str
   }
 }
 
+/** Nur Genre/Zusammenfassung übersetzen — Titel/Autor unverändert lassen. */
 export async function ensureGermanMetadata(fields: {
   title: string;
   author: string;
   genre: string;
   summary: string;
 }): Promise<{ title: string; author: string; genre: string; summary: string }> {
-  const [title, genre, summary] = await Promise.all([
-    isLikelyGerman(fields.title) ? fields.title : translateToGerman(fields.title, 200),
-    isLikelyGerman(fields.genre) ? fields.genre : translateToGerman(fields.genre, 80),
-    isLikelyGerman(fields.summary) ? fields.summary : translateToGerman(fields.summary, 450)
-  ]);
+  try {
+    const genre = isLikelyGerman(fields.genre)
+      ? fields.genre
+      : await translateToGerman(fields.genre, 80);
+    const summary = isLikelyGerman(fields.summary)
+      ? fields.summary
+      : await translateToGerman(fields.summary, 450);
 
-  return {
-    title,
-    author: fields.author,
-    genre,
-    summary
-  };
+    return {
+      title: fields.title,
+      author: fields.author,
+      genre,
+      summary
+    };
+  } catch {
+    return fields;
+  }
 }
