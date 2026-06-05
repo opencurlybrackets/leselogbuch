@@ -7,6 +7,11 @@
 import { ai } from "@/ai/genkit";
 import { z } from "zod";
 import { refineWithOllama } from "@/ai/ollama";
+import {
+  ensureGermanMetadata,
+  pickBestGermanGoogleItem,
+  pickBestGermanOpenLibraryDoc
+} from "@/lib/book-locale";
 
 const SmartBookEntryInputSchema = z.object({
   query: z.string().trim().min(1).describe("Der Buchtitel oder Autor.")
@@ -34,11 +39,15 @@ const BookSuggestionsOutputSchema = z.object({
 });
 export type BookSuggestionsOutput = z.infer<typeof BookSuggestionsOutputSchema>;
 
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
 /**
  * Hilfsfunktion zum Abrufen von Daten von der Google Books API.
  */
 async function fetchFromGoogleBooks(query: string): Promise<{ data: any | null; status: number }> {
-  const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=5`;
+  const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=8&langRestrict=de`;
   try {
     const response = await fetch(url);
     if (!response.ok) {
@@ -55,7 +64,7 @@ async function fetchFromGoogleBooks(query: string): Promise<{ data: any | null; 
  * OpenLibrary Fallback (kostenlos, ohne API-Key).
  */
 async function fetchFromOpenLibrary(query: string) {
-  const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=5`;
+  const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=8&language=de`;
   try {
     const response = await fetch(url);
     if (!response.ok) return null;
@@ -114,10 +123,28 @@ const refinementPrompt = ai.definePrompt({
 Liefere ein präzises deutsches Genre und eine packende Zusammenfassung (max. 3 Sätze).`
 });
 
+async function finalizeBookFields(fields: {
+  title: string;
+  author: string;
+  genre: string;
+  summary: string;
+  coverImageUrl: string;
+  sourceUsed: "googlebooks" | "openlibrary";
+  aiUsed: "ollama" | "none";
+}): Promise<SmartBookEntryOutput> {
+  const german = await ensureGermanMetadata({
+    title: fields.title,
+    author: fields.author,
+    genre: fields.genre,
+    summary: fields.summary
+  });
+  return { ...fields, ...german };
+}
+
 export async function smartBookEntry(input: SmartBookEntryInput): Promise<SmartBookEntryOutput> {
   const googleRes = await fetchFromGoogleBooks(input.query);
   let googleData = googleRes.data;
-  let item = googleData?.items?.[0];
+  let item = pickBestGermanGoogleItem(googleData?.items) ?? googleData?.items?.[0];
   let sourceUsed: "googlebooks" | "openlibrary" = "googlebooks";
 
   // Fallback: KI-Korrektur nur wenn Google nichts findet
@@ -128,7 +155,7 @@ export async function smartBookEntry(input: SmartBookEntryInput): Promise<SmartB
       if (corrected && corrected.toLowerCase() !== input.query.toLowerCase()) {
         const correctedRes = await fetchFromGoogleBooks(corrected);
         googleData = correctedRes.data;
-        item = googleData?.items?.[0];
+        item = pickBestGermanGoogleItem(googleData?.items) ?? googleData?.items?.[0];
       }
     } catch {
       console.warn("[Flow] KI-Korrektur übersprungen (evtl. fehlender API Key)");
@@ -141,7 +168,8 @@ export async function smartBookEntry(input: SmartBookEntryInput): Promise<SmartB
       console.warn("[Google Books] Quota erreicht (429). Weiche auf OpenLibrary aus.");
     }
     const ol = await fetchFromOpenLibrary(input.query);
-    const doc = ol?.docs?.[0];
+    const doc =
+      ol?.docs?.find((d: Record<string, unknown>) => pickBestGermanOpenLibraryDoc(d)) ?? ol?.docs?.[0];
     if (!doc) {
       throw new Error(`Buch "${input.query}" nicht gefunden. Bitte prüfe die Schreibweise.`);
     }
@@ -177,7 +205,15 @@ export async function smartBookEntry(input: SmartBookEntryInput): Promise<SmartB
       aiUsed = "ollama";
     }
 
-    return { title, author, genre, summary, coverImageUrl: coverUrl, sourceUsed, aiUsed };
+    return finalizeBookFields({
+      title,
+      author,
+      genre,
+      summary,
+      coverImageUrl: coverUrl,
+      sourceUsed,
+      aiUsed
+    });
   }
 
   const info = item.volumeInfo;
@@ -186,7 +222,8 @@ export async function smartBookEntry(input: SmartBookEntryInput): Promise<SmartB
   const isbn = info.industryIdentifiers?.find((id: any) => String(id.type).includes("ISBN_13"))?.identifier;
 
   let genre = info.categories?.[0] || "Roman";
-  let summary = info.description ? `${String(info.description).substring(0, 300)}...` : "Keine Beschreibung verfügbar.";
+  const rawDesc = info.description ? stripHtml(String(info.description)) : "";
+  let summary = rawDesc ? `${rawDesc.substring(0, 300)}...` : "Keine Beschreibung verfügbar.";
   let aiUsed: "ollama" | "none" = "none";
 
   // Veredelung: zuerst Ollama (lokal), sonst Genkit-Stub (falls später ersetzt)
@@ -224,14 +261,26 @@ export async function smartBookEntry(input: SmartBookEntryInput): Promise<SmartB
     coverUrl = `https://picsum.photos/seed/${encodeURIComponent(title)}/400/600`;
   }
 
-  return { title, author, genre, summary, coverImageUrl: coverUrl, sourceUsed, aiUsed };
+  return finalizeBookFields({
+    title,
+    author,
+    genre,
+    summary,
+    coverImageUrl: coverUrl,
+    sourceUsed,
+    aiUsed
+  });
 }
 
 export async function getBookSuggestions(input: SmartBookEntryInput): Promise<BookSuggestionsOutput> {
   const googleRes = await fetchFromGoogleBooks(input.query);
   const googleData = googleRes.data;
   if (googleData?.items?.length) {
-    const suggestions = googleData.items
+    const suggestions = [...googleData.items]
+      .sort(
+        (a: { volumeInfo?: Record<string, unknown> }, b: { volumeInfo?: Record<string, unknown> }) =>
+          (b.volumeInfo?.language === "de" ? 1 : 0) - (a.volumeInfo?.language === "de" ? 1 : 0)
+      )
       .map((item: any) => ({
         title: item.volumeInfo.title,
         author: item.volumeInfo.authors?.join(", ") || "Unbekannter Autor"
@@ -245,7 +294,11 @@ export async function getBookSuggestions(input: SmartBookEntryInput): Promise<Bo
   const ol = await fetchFromOpenLibrary(input.query);
   if (!ol?.docs?.length) return { suggestions: [] };
 
-  const suggestions = ol.docs
+  const suggestions = [...ol.docs]
+    .sort(
+      (a: Record<string, unknown>, b: Record<string, unknown>) =>
+        (pickBestGermanOpenLibraryDoc(b) ? 1 : 0) - (pickBestGermanOpenLibraryDoc(a) ? 1 : 0)
+    )
     .map((doc: any) => ({
       title: String(doc.title ?? ""),
       author: Array.isArray(doc.author_name) ? doc.author_name.join(", ") : "Unbekannter Autor"

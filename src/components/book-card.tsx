@@ -1,6 +1,7 @@
 "use client";
 
 import type { Book } from "@/lib/types";
+import { Star } from "lucide-react";
 
 export function BookCard({ book, onClick }: { book: Book; onClick: (b: Book) => void }) {
   return (
@@ -42,6 +43,20 @@ export function BookCard({ book, onClick }: { book: Book; onClick: (b: Book) => 
           <div style={{ fontWeight: 700, lineHeight: 1.2 }}>{book.title}</div>
           <div style={{ opacity: 0.8, marginTop: 4, fontSize: 13 }}>{book.author}</div>
           {book.genre ? <div style={{ opacity: 0.7, marginTop: 8, fontSize: 12 }}>{book.genre}</div> : null}
+          {(book.rating ?? 0) > 0 ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 2, marginTop: 8 }}>
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Star
+                  key={i}
+                  size={12}
+                  style={{
+                    fill: i < (book.rating ?? 0) ? "#fbbf24" : "transparent",
+                    color: i < (book.rating ?? 0) ? "#fbbf24" : "#6b7280"
+                  }}
+                />
+              ))}
+            </div>
+          ) : null}
         </div>
       </div>
     </button>

@@ -156,9 +156,10 @@ export default function LeseLogbuchPage() {
         book={selectedBook}
         isOpen={isDetailsOpen}
         onClose={() => setIsDetailsOpen(false)}
-        onUpdate={(id, up) =>
-          setBooks((prev) => prev.map((b) => (b.id === id ? { ...b, ...up } : b)))
-        }
+        onUpdate={(id, up) => {
+          setBooks((prev) => prev.map((b) => (b.id === id ? { ...b, ...up } : b)));
+          setSelectedBook((prev) => (prev?.id === id ? { ...prev, ...up } : prev));
+        }}
         onDelete={(id) => setBooks((prev) => prev.filter((b) => b.id !== id))}
       />
       <Toaster />

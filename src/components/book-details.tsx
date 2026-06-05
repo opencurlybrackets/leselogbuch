@@ -1,6 +1,7 @@
 "use client";
 
 import type { Book } from "@/lib/types";
+import { StarRating } from "@/components/star-rating";
 
 export function BookDetails({
   book,
@@ -21,64 +22,53 @@ export function BookDetails({
     <div
       role="dialog"
       aria-modal="true"
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.65)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 16
-      }}
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/65"
       onClick={onClose}
     >
       <div
-        style={{
-          width: "min(720px, 100%)",
-          background: "#0f172a",
-          border: "1px solid #1f2937",
-          borderRadius: 16,
-          padding: 16,
-          color: "#f3f4f6"
-        }}
+        className="w-full max-w-xl rounded-2xl border border-border bg-card text-card-foreground p-5 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>{book.title}</div>
-            <div style={{ opacity: 0.8, marginTop: 4 }}>{book.author}</div>
+        <div className="flex justify-between gap-4">
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold leading-tight">{book.title}</h2>
+            <p className="text-sm text-muted-foreground mt-1">{book.author}</p>
+            {book.genre ? <p className="text-xs text-muted-foreground mt-2">{book.genre}</p> : null}
           </div>
-          <button onClick={onClose} style={{ background: "transparent", color: "#f3f4f6", border: "none" }}>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-sm text-muted-foreground hover:text-foreground shrink-0"
+          >
             Schließen
           </button>
         </div>
 
-        {book.summary ? <p style={{ marginTop: 12, opacity: 0.9 }}>{book.summary}</p> : null}
+        {book.summary ? <p className="mt-4 text-sm leading-relaxed opacity-90">{book.summary}</p> : null}
 
-        <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
+        <div className="mt-5 space-y-2">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Bewertung</p>
+          <StarRating
+            value={book.rating ?? 0}
+            onChange={(rating) => onUpdate(book.id, { rating })}
+          />
+          {(book.rating ?? 0) > 0 ? (
+            <p className="text-xs text-muted-foreground">{book.rating} von 5 Sternen</p>
+          ) : (
+            <p className="text-xs text-muted-foreground">Stern antippen zum Bewerten</p>
+          )}
+        </div>
+
+        <div className="flex gap-2 mt-6">
           <button
-            onClick={() => onUpdate(book.id, { rating: Math.min(5, (book.rating ?? 0) + 1) })}
-            style={{
-              background: "#334155",
-              border: "1px solid #475569",
-              color: "#f3f4f6",
-              padding: "8px 10px",
-              borderRadius: 10,
-              cursor: "pointer"
+            type="button"
+            onClick={() => {
+              if (confirm(`„${book.title}" wirklich löschen?`)) {
+                onDelete(book.id);
+                onClose();
+              }
             }}
-          >
-            Rating +1
-          </button>
-          <button
-            onClick={() => onDelete(book.id)}
-            style={{
-              background: "#7f1d1d",
-              border: "1px solid #991b1b",
-              color: "#f3f4f6",
-              padding: "8px 10px",
-              borderRadius: 10,
-              cursor: "pointer"
-            }}
+            className="text-sm px-3 py-2 rounded-lg bg-destructive/20 text-destructive border border-destructive/40 hover:bg-destructive/30"
           >
             Löschen
           </button>
@@ -87,4 +77,3 @@ export function BookDetails({
     </div>
   );
 }
-
