@@ -31,30 +31,23 @@ export default function LoginPage() {
           email: email.trim(),
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
-          },
+            emailRedirectTo: `${window.location.origin}/auth/callback`
+          }
         });
-
         if (error) throw error;
-
-        setMessage(
-          "Konto erstellt. Falls E-Mail-Bestätigung aktiv ist, bitte Link in der Mail öffnen — sonst direkt anmelden."
-        );
+        setMessage("Konto erstellt. Falls E-Mail-Bestätigung aktiv ist, bitte Link in der Mail öffnen — sonst direkt anmelden.");
         setMode("signin");
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email: email.trim(),
-          password,
+          password
         });
-
         if (error) throw error;
-
         router.push("/");
         router.refresh();
       }
     } catch (err: unknown) {
-      const text =
-        err instanceof Error ? err.message : "Anmeldung fehlgeschlagen.";
+      const text = err instanceof Error ? err.message : "Anmeldung fehlgeschlagen.";
       setMessage(text);
     } finally {
       setIsLoading(false);
@@ -70,16 +63,12 @@ export default function LoginPage() {
           </div>
           <div>
             <h1 className="text-xl font-bold">LeseLogbuch</h1>
-            <p className="text-sm text-muted-foreground">
-              Persönlicher Zugang
-            </p>
+            <p className="text-sm text-muted-foreground">Persönlicher Zugang</p>
           </div>
         </div>
 
         {authError ? (
-          <p className="text-sm text-destructive mb-4">
-            Anmeldung fehlgeschlagen. Bitte erneut versuchen.
-          </p>
+          <p className="text-sm text-destructive mb-4">Anmeldung fehlgeschlagen. Bitte erneut versuchen.</p>
         ) : null}
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -98,20 +87,14 @@ export default function LoginPage() {
               placeholder="deine@email.de"
             />
           </div>
-
           <div>
-            <label
-              className="text-sm text-muted-foreground"
-              htmlFor="password"
-            >
+            <label className="text-sm text-muted-foreground" htmlFor="password">
               Passwort
             </label>
             <Input
               id="password"
               type="password"
-              autoComplete={
-                mode === "signup" ? "new-password" : "current-password"
-              }
+              autoComplete={mode === "signup" ? "new-password" : "current-password"}
               required
               minLength={8}
               value={password}
@@ -121,9 +104,7 @@ export default function LoginPage() {
             />
           </div>
 
-          {message ? (
-            <p className="text-sm text-muted-foreground">{message}</p>
-          ) : null}
+          {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
 
           <Button type="submit" className="w-full h-11" disabled={isLoading}>
             {isLoading ? (
@@ -153,8 +134,8 @@ export default function LoginPage() {
         </button>
 
         <p className="mt-6 text-xs text-muted-foreground leading-relaxed">
-          Nur für deinen persönlichen Zugang. Nach der Registrierung kannst du
-          in Supabase weitere Anmeldungen deaktivieren (siehe SUPABASE.md).
+          Nur für deinen persönlichen Zugang. Nach der Registrierung kannst du in Supabase weitere Anmeldungen
+          deaktivieren (siehe SUPABASE.md).
         </p>
       </div>
     </div>
