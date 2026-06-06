@@ -24,6 +24,11 @@ Dann im Browser öffnen: http://localhost:3000
 - Im `smart-book-entry` Flow habe ich die **doppelten Backticks** in Template-Strings korrigiert und `z` auf **zod** umgestellt.
 - `src/ai/genkit.ts` ist aktuell nur ein **Stub**, damit der Build auch ohne Genkit/API-Key läuft. Du kannst ihn später durch echtes Genkit ersetzen.
 
+## Login & Cloud-Speicher (Supabase)
+
+Ausführliche Anleitung: **[SUPABASE.md](./SUPABASE.md)**  
+Bücher liegen in Supabase (PostgreSQL), Zugang per E-Mail + Passwort.
+
 ## Online stellen (GitHub + Vercel)
 
 Ausführliche Anleitung: **[DEPLOY.md](./DEPLOY.md)**

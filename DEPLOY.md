@@ -60,6 +60,15 @@ Nach 1–2 Minuten erhältst du eine URL wie `https://leselogbuch-xyz.vercel.app
 
 Vercel → Project → **Settings → Domains** (Free Tier: `*.vercel.app` reicht meist).
 
+### Supabase (Login + Bücher in der Cloud)
+
+Env-Variablen in Vercel setzen (siehe **[SUPABASE.md](./SUPABASE.md)**):
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+Ohne diese Variablen funktioniert Login/Speichern nicht.
+
 ### Optional: Ollama in der Cloud
 
 Ollama auf Vercel ist nicht möglich. Nur sinnvoll, wenn du später ein **eigenes** Ollama/API-Gateway hostest und in Vercel setzt:
